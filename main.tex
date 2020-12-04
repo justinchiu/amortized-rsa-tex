@@ -1,0 +1,239 @@
+%
+% File emnlp2020.tex
+%
+%% Based on the style files for ACL 2020, which were
+%% Based on the style files for ACL 2018, NAACL 2018/19, which were
+%% Based on the style files for ACL-2015, with some improvements
+%%  taken from the NAACL-2016 style
+%% Based on the style files for ACL-2014, which were, in turn,
+%% based on ACL-2013, ACL-2012, ACL-2011, ACL-2010, ACL-IJCNLP-2009,
+%% EACL-2009, IJCNLP-2008...
+%% Based on the style files for EACL 2006 by 
+%%e.agirre@ehu.es or Sergi.Balari@uab.es
+%% and that of ACL 08 by Joakim Nivre and Noah Smith
+
+\documentclass[11pt,a4paper]{article}
+\usepackage[hyperref]{emnlp2020}
+\usepackage{times}
+\usepackage{latexsym}
+\renewcommand{\UrlFont}{\ttfamily\small}
+
+\newcommand\qphi{q_\phi}
+\newcommand\pt{\tilde{p}}
+
+\makeatletter
+\def\blfootnote{\xdef\@thefnmark{}\@footnotetext}
+\makeatother
+
+% This is not strictly necessary, and may be commented out,
+% but it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+\usepackage{mystyle}
+\usepackage{subcaption} 
+\usepackage{todonotes}
+
+% trellis
+\usepackage{tikz}%
+
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+
+\usepackage{pgfplots}
+
+%% ADD BACK!!!!!!!!!!!!!!!!!
+\aclfinalcopy % Uncomment this line for the final submission
+%\def\aclpaperid{0} %  Enter the acl Paper ID here
+
+%\setlength\titlebox{5cm}
+% You can expand the titlebox if you need extra space
+% to show all the authors. Please do not make the titlebox
+% smaller than 5cm (the original size); we will check this
+% in the camera-ready version and ask you to change it back.
+
+\newcommand\BibTeX{B\textsc{ib}\TeX}
+\newcommand\Emit{\mathbf{O}}
+\newcommand\Trans{\mathbf{T}}
+
+\title{Class project: Amortized RSA}
+
+\author{Justin T. Chiu\\
+  Department of Computer Science \\
+  Cornell Tech \\
+  \texttt{jtc257@cornell.edu}\\
+}
+
+\date{}
+\raggedbottom
+
+\begin{document}
+\maketitle
+\begin{abstract}
+The RSA inference procedure is expensive,
+as exact inference requires considering all possible utterances.
+\citet{white2020learning} amortize the cost of inference with
+a language model.
+We build upon their work,
+drawing connections to language drift \citep{}
+and energy networks \citep{belanger2016structured}.
+\end{abstract}
+
+\section{Introduction}
+% what is rsa
+RSA is an inference procedure based on Gricean maxims 
+for generating and understanding language in a collaborative setting.
+\todo{more on the recursive reasoning inspiration? not sure what the right word is}
+% why is it useful
+RSA has had empirical success in small domains, in particular simple reference games
+with very limited vocabularies.\todo{examples of phenomena?}
+RSA is potentially useful beyond these domains as a heuristic for utility maximization.
+Extensions of RSA to nontrivial vocabularies requires approximations:
+incremental RSA \citep{}, reranking \citep{}, and variational inference \citep{white2020learning}.
+
+We focus on amortization for approximate inference,
+which has had empirical success in applications such as VAEs, RL
+\todo{policy parameterization is amortization}.
+We highlight two broad classes of errors in text generation,
+and examine their effects on the \textsc{Colors} dataset \citep{}.
+\begin{itemize}
+\item Model error (listener/likelihood, prior)
+\item Search error (amortization, objective)
+\end{itemize}
+While each of these may manifest in various ways, we examine two manifestations of each.
+\todo{expand}
+
+\section{Related Work}
+Cho's paper on training a greedy decoder \citep{gu2017trainable}.
+Amortized VI, SVI.
+Sequence KD.
+Descent-based methods for RL, policy grad.
+
+Language drift papers? 
+https://proceedings.neurips.cc/paper/2017/file/70222949cc0db89ab32c9969754d4758-Paper.pdf
+http://proceedings.mlr.press/v70/jaques17a/jaques17a.pdf
+but really the approach here is just bayes rule + VI.
+
+Incremental RSA
+\citep{cohngordon2018pragmatically}\todo{right paper?}
+
+Defines RSA objective \citep{zaslavsky2020ratedistortion}, also Yuan.
+
+For listeners:
+1) Learns with margin-based approximation of pseudolikelihood \citep{gulordava2020dax}?
+2) Learns through approximate RSA procedure by subsampling utterances \citep{mcdowell2019learning}
+
+
+\section{Problem Setup}
+The \textsc{ShapesWorld} dataset consists of games where two players,
+a speaker and a listener, collaborate to identify a target object out of a given set.
+Given a set of three objects, $o = \set{o_1,o_2,o_3}$, the goal of the speaker
+is to accurately describe the object at index $t\in [3]$,
+to the listener through a single utterance
+$u = \langle u_1, \ldots, u_L \rangle$ consisting of words $u_l$.
+The speaker is a distribution over utterances $p(u \mid t, o)$, while
+the listener is a distribution over targets $p(t \mid u, o)$.
+
+\section{Noisy Channel}
+Noisy channel in the spirit of RSA
+RSA hypothesizes that agents reason about partners recursively repeatedly.
+
+\section{Method}
+Noisy channel decoding.
+Interested in optimizing the following objective:
+\begin{equation}
+\label{eqn:obj}
+\argmax_u p(u \mid t,o),
+\end{equation}
+where the posterior is given by
+\begin{equation}
+p(u\mid t, o) = \frac{p(t \mid u, o)p(u \mid o)}{p(t \mid o)}.
+\end{equation}
+Normally inference is difficult because the denominator is intractable.
+In this case the denominator is a constant
+since the referent is uniformly chosen from the context.
+The issue here is that the likelihood term, $p(t \mid u, o)$ does not decompose over 
+the sequence $u$, i.e. it only operates over full sequences, preventing efficient inference
+which requires the scoring of prefixes.
+
+Rather than decoding by enumerating all possible sequence for each context,
+\citet{white2020learning} propose to amortize the cost of inference.
+Basically doing backups through SGD.
+This is accomplished by, rather than independently optimizing
+
+\paragraph{Variational objective}
+Non-decomposable Bayes' rule, introduce variational objective:
+\begin{equation}
+\begin{aligned}
+&\min_\phi \mcL(\phi) \\
+&=\min_\phi \KL{\qphi(u\mid t) \;||\; p(u\mid t)}\\
+&= \min_\phi \Es{\qphi(u)}{\log \qphi(u\mid t) - \log p(u\mid t)}\\
+&= \min_\phi \Es{\qphi(u)}{\log \qphi(u\mid t) - \log p(t \mid u)p(u)},
+\end{aligned}
+\end{equation}
+where conditioning on the full context $o$ has been dropped for brevity,
+and the denominator $p(t\mid o)$ from the posterior is constant wrt $\phi$
+and can be safely ignored.
+Importantly, we ensure that $\qphi(u)$ decomposes and thus admits a tractable search procedure.
+
+
+\paragraph{Comparison to imitation learning}
+Objective is reverse KL.
+Do not have to model full conditional distribution, 
+just what is both informative and fluent.
+Similar to mode-dropping in GANs, which allows the model to better
+utilize its limited capacity.
+
+\section{Experiments}
+
+
+\section{Results}
+We analyze the performance of the amortized speaker from two lenses:
+model error and search error.
+Model error pertains to issues with the generative model,
+which is given in Equation~\ref{eqn:generative-model}.
+The model informs the variational objective during inference.
+The search error encompasses the search procedure itself,
+which includes the training of the amortized speaker and subsequent
+generation using the amortized speaker.
+
+\subsection{Model Error}
+The objective consists of two terms: the likelihood of the target given an utterance
+$p(t \mid u, c)$ and the utterance prior $p(u \mid c)$.
+
+\paragraph{Prior}
+Ideally the utterance prior would be close to the human distribution over utterances,
+in order to ensure optimizing the objective results in human-like utterances.
+We experiment with a couple formulations:
+the uniform given length prior \citep{white2020learning} and
+a more informative language model prior.
+
+We measure the effect of the prior by comparing the perplexity and accuracy of the 
+amortized speaker trained with either a uniform given length or more informative language
+model prior.
+
+\paragraph{Likelihood}
+We also evaluate the listener's accuracy on validation data,
+as well as sensitivity to low-probability words.
+
+\subsection{Search Error}
+intro
+
+\paragraph{Amortization error}
+We examine whether there is error due to amortization,
+rather than directly optimizing the objective.
+
+In the enumerable case, this is simply
+
+\section{Discussion}
+
+\bibliographystyle{acl_natbib}
+\bibliography{anthology}
+
+%\clearpage
+\appendix
+
+\section*{Appendix}
+\section{Blah}
+   
+\end{document}
