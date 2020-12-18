@@ -18,8 +18,7 @@
 \usepackage{latexsym}
 \renewcommand{\UrlFont}{\ttfamily\small}
 
-\newcommand\qphi{q_\phi}
-\newcommand\pt{\tilde{p}}
+\newcommand\qtheta{q_\theta}
 
 \makeatletter
 \def\blfootnote{\xdef\@thefnmark{}\@footnotetext}
@@ -70,170 +69,326 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-The RSA inference procedure is expensive,
-as exact inference requires considering all possible utterances.
-\citet{white2020learning} amortize the cost of inference with
-a language model.
-We build upon their work,
-drawing connections to language drift \citep{}
-and energy networks \citep{belanger2016structured}.
+The Rational Speech Acts inference procedure has
+been demonstrated to be effective as a model of human 
+behaviour in small reference games.
+However, the inference procedure is expensive
+as it requires considering all possible utterances.
+\citet{white2020learning} amortize the cost of inference by
+training a language model perform to maximize the objective
+the RSA procedure optimizes.
+The resulting amortized model displays symptomps of
+language drift, where in optimizing the RSA objective
+produced utterances are unhuman-like.
+We build upon their amortization procedure
+by proposing a change to the objective
+that prevents language drift.
 \end{abstract}
 
 \section{Introduction}
 % what is rsa
-RSA is an inference procedure based on Gricean maxims 
+The Rational Speech Acts (RSA) framework is an inference procedure based on Gricean maxims 
 for generating and understanding language in a collaborative setting.
-\todo{more on the recursive reasoning inspiration? not sure what the right word is}
 % why is it useful
 RSA has had empirical success in small domains, in particular simple reference games
-with very limited vocabularies.\todo{examples of phenomena?}
+with very limited vocabularies.
 RSA is potentially useful beyond these domains as a heuristic for utility maximization.
 Extensions of RSA to nontrivial vocabularies requires approximations:
-incremental RSA \citep{}, reranking \citep{}, and variational inference \citep{white2020learning}.
+incremental RSA \citep{cohngordon2018pragmatically},
+reranking, and/or variational inference \citep{white2020learning}.
 
-We focus on amortization for approximate inference,
-which has had empirical success in applications such as VAEs, RL
-\todo{policy parameterization is amortization}.
+We focus on amortization for approximating RSA speakers,
+which has had empirical success in applications such as 
+variational autoencoders and reinforcement learning.
 We highlight two broad classes of errors in text generation,
-and examine their effects on the \textsc{Colors} dataset \citep{}.
-\begin{itemize}
-\item Model error (listener/likelihood, prior)
-\item Search error (amortization, objective)
-\end{itemize}
-While each of these may manifest in various ways, we examine two manifestations of each.
-\todo{expand}
+and examine their effects on the \textsc{ShapeWorld} dataset:
+model error and search error.
 
 \section{Related Work}
-Cho's paper on training a greedy decoder \citep{gu2017trainable}.
-Amortized VI, SVI.
-Sequence KD.
-Descent-based methods for RL, policy grad.
+The approach of \citet{white2020learning} is the basis of our project,
+and the apply the amortization approach to both the \textsc{ShapeWorld}
+and \textsc{Colors} dataset.
+Unfortunately we only have time to fit in the \textsc{ShapeWorld} dataset,
+on which we find a small contradiction to one of claims:
+we find that RSA does not help with task performance.
 
-Language drift papers? 
-https://proceedings.neurips.cc/paper/2017/file/70222949cc0db89ab32c9969754d4758-Paper.pdf
-http://proceedings.mlr.press/v70/jaques17a/jaques17a.pdf
-but really the approach here is just bayes rule + VI.
+A similar amortization approach can also be found in \citet{gu2017trainable},
+which attempt to train a greedy decoder to mirror the performance
+of beam search in a teacher model for machine translation.
 
-Incremental RSA
-\citep{cohngordon2018pragmatically}\todo{right paper?}
+Amortization also shows up in variational autoencoders,
+and one could interpret all parameterized policies trained through via policy gradient 
+as instances of amortization as well,
+where the alternative would be to explicitly perform policy iteration.
 
-Defines RSA objective \citep{zaslavsky2020ratedistortion}, also Yuan.
+Incremental RSA \citep{cohngordon2018pragmatically} is another approach 
+for approximating the expensive inference procedure in RSA,
+although that methods has no principled interpretation.
 
-For listeners:
-1) Learns with margin-based approximation of pseudolikelihood \citep{gulordava2020dax}?
-2) Learns through approximate RSA procedure by subsampling utterances \citep{mcdowell2019learning}
+Approximations for RSA listeners, rather than speakers, have been explored as well.
+Other works use a margin-based approximation of pseudolikelihood \citep{gulordava2020dax},
+and learn through approximate RSA procedure via importance sampling over utterances
+\citep{mcdowell2019learning}.
 
 
 \section{Problem Setup}
-The \textsc{ShapesWorld} dataset consists of games where two players,
+The \textsc{ShapeWorld} dataset consists of games where two players,
 a speaker and a listener, collaborate to identify a target object out of a given set.
 Given a set of three objects, $o = \set{o_1,o_2,o_3}$, the goal of the speaker
 is to accurately describe the object at index $t\in [3]$,
 to the listener through a single utterance
-$u = \langle u_1, \ldots, u_L \rangle$ consisting of words $u_l$.
-The speaker is a distribution over utterances $p(u \mid t, o)$, while
-the listener is a distribution over targets $p(t \mid u, o)$.
-
-\section{Noisy Channel}
-Noisy channel in the spirit of RSA
-RSA hypothesizes that agents reason about partners recursively repeatedly.
+$u = \langle u_1, \ldots, u_L \rangle$.
+Utterances are limited to a fixed vocabulary of size 14 consisting of colors and shapes.
+The data generating process only uses at most $L \le 2$ utterances,
+consisting of a color and/or shape.
+The literal speaker is a distribution over utterances $s_0 = p(u \mid t, o)$, while
+the literal listener is a distribution over targets $l_0 = p(t \mid u, o)$.
 
 \section{Method}
-Noisy channel decoding.
-Interested in optimizing the following objective:
+We are interested in decoding an utterance $u$ that refers to target $t$ 
+by optimizing the following program:
 \begin{equation}
-\label{eqn:obj}
-\argmax_u p(u \mid t,o),
+\argmax_u F(u, t, o),
 \end{equation}
-where the posterior is given by
-\begin{equation}
-p(u\mid t, o) = \frac{p(t \mid u, o)p(u \mid o)}{p(t \mid o)}.
-\end{equation}
-Normally inference is difficult because the denominator is intractable.
-In this case the denominator is a constant
-since the referent is uniformly chosen from the context.
-The issue here is that the likelihood term, $p(t \mid u, o)$ does not decompose over 
-the sequence $u$, i.e. it only operates over full sequences, preventing efficient inference
-which requires the scoring of prefixes.
+where $F$ is only able to score full utterances $u$.
+This prevents efficient inference, which would require that $F$
+decomposes over prefixes of $u$ from left to right.
+Such a decomposition would allow beam search, or other approximate inference techniques.
+Instead, we must optimize $F$ with the following procedure:
+\begin{enumerate}
+\item Enumerate all possible utterances $u$
+\item Score all utterances according to $F(u,t,o)$
+\item Choose the highest scoring utterance.
+\end{enumerate}
+When the number of possible utterances is infinite or exponentially large
+in the length of the longest allowed utterance, this procedure is infeasible.
 
 Rather than decoding by enumerating all possible sequence for each context,
 \citet{white2020learning} propose to amortize the cost of inference.
-Basically doing backups through SGD.
-This is accomplished by, rather than independently optimizing
-
-\paragraph{Variational objective}
-Non-decomposable Bayes' rule, introduce variational objective:
+This is accomplished by training a left-to-right model to approximate the argmax of $F$
+by optimizing the following program:  
 \begin{equation}
+\argmax_\theta \Es{p(t,o)}{\Es{q_\theta(u\mid t,o)}{F(u,t,o)}},
+\end{equation}
+where $q_\theta(u \mid t, o)$ is the amortized speaker.
+This objective can be optimized via stochastic gradient descent using the 
+score function gradient estimator, or a biased gradient estimator in the Gumbel-softmax
+family of estimators.
+
+\citet{white2020learning} explore a single objective, given by
+\begin{equation}
+F_{\textrm{length}}(t,u,o) = \log l_0(t\mid u,o)  + \log \lambda|u|.
+\end{equation}
+This corresponds to MAP inference in a noisy channel model with
+a relatively uninformative prior that is constant given a length.
+The hyperparameter $\lambda$ controls how much influence the prior has on the objective.
+We refer to this objective as length.
+
+We explore two more objectives, the first of which uses an informative prior in MAP inference:
+\begin{equation}
+F_{\textrm{MAP}}(t,u,o) = \log l_0(t\mid u,o) + \log p(u\mid o),
+\end{equation}
+where $p(u \mid o)$ is a speaker that does not condition on the target $t$.
+We refer to this objective as MAP.
+
+The last objective introduces a slightly larger change.
+Rather than approximate MAP inference,
+the goal is to fully approximate the posterior of the following noisy channel model
+$$p(u \mid t,o) = \frac{p(t \mid u, o)p(u \mid o)}{p(t \mid o)}.$$
+This is accomplished by minimizing the KL divergence between the posterior
+and the amortized approximation as follows:
+\begin{equation}
+\label{eqn:bayes}
 \begin{aligned}
-&\min_\phi \mcL(\phi) \\
-&=\min_\phi \KL{\qphi(u\mid t) \;||\; p(u\mid t)}\\
-&= \min_\phi \Es{\qphi(u)}{\log \qphi(u\mid t) - \log p(u\mid t)}\\
-&= \min_\phi \Es{\qphi(u)}{\log \qphi(u\mid t) - \log p(t \mid u)p(u)},
+&\min_\theta \KL{\qtheta(u\mid t) \;||\; p(u\mid t)}\\
+&= \min_\theta \Es{\qtheta(u)}{\log \qtheta(u\mid t) - \log p(u\mid t)}\\
+&= \min_\theta \Es{\qtheta(u)}{\log \qtheta(u\mid t) - \log p(t \mid u)p(u)},
 \end{aligned}
 \end{equation}
 where conditioning on the full context $o$ has been dropped for brevity,
-and the denominator $p(t\mid o)$ from the posterior is constant wrt $\phi$
+and the denominator $p(t\mid o)$ from the posterior is constant wrt $\theta$
 and can be safely ignored.
-Importantly, we ensure that $\qphi(u)$ decomposes and thus admits a tractable search procedure.
+We refer to this objective as Bayes.
 
-
-\paragraph{Comparison to imitation learning}
-Objective is reverse KL.
-Do not have to model full conditional distribution, 
-just what is both informative and fluent.
-Similar to mode-dropping in GANs, which allows the model to better
-utilize its limited capacity.
+The difference between the MAP and Bayes objectives is the addition of 
+the negative entropy term, $\Es{q}{\log q}$, in Equation~\ref{eqn:bayes}.
+This entropy regularization encourages $q$ to not reduce to a point mass,
+unlike the other objectives which have no such pressure.
 
 \section{Experiments}
+We evaluate amortized speakers obtained by optimizing the 
+three objectives: length, MAP, and Bayes, on the \textsc{ShapeWorld} dataset.
+We compare the three amortized speakers against each other, as well as against
+the base literal speaker, on three metrics:
+how accurately a collection of literal listeners trained on separate data
+can infer the correct target,
+the likelihood of the produced utterances under a marginal language model,
+and the length of the produced utterances.
+The last two metrics, likelihood and length, are strongly correlated in the case of 
+\textsc{ShapeWorld}, where there is no strong preference for particular utterances
+due to the small size of the vocabulary.
 
+Literal listeners and speakers are trained on the same splits of randomly sampled
+\textsc{ShapeWorld} contexts as in \citep{white2020learning}.
+The speaker $p(u \mid o)$ that was used to train the amortized speakers and
+does not conditional on targets was trained on the same training splits.
+Amortized speakers are trained via stochastic gradient descent using the
+straight-through Gumbel-softmax gradient estimator.
+
+Ten test literal listeners were trained on held-out generated data and used for evaluation.
 
 \section{Results}
-We analyze the performance of the amortized speaker from two lenses:
-model error and search error.
-Model error pertains to issues with the generative model,
-which is given in Equation~\ref{eqn:generative-model}.
-The model informs the variational objective during inference.
-The search error encompasses the search procedure itself,
-which includes the training of the amortized speaker and subsequent
-generation using the amortized speaker.
+Before discussing speaker performance,
+we find that the base literal listener is quite accurate, obtaining 96.94\% accuracy
+on the ground truth test data.
+This is expected, as the data in \textsc{ShapeWorld} is very simple and artificially generated.
 
-\subsection{Model Error}
-The objective consists of two terms: the likelihood of the target given an utterance
-$p(t \mid u, c)$ and the utterance prior $p(u \mid c)$.
 
-\paragraph{Prior}
-Ideally the utterance prior would be close to the human distribution over utterances,
-in order to ensure optimizing the objective results in human-like utterances.
-We experiment with a couple formulations:
-the uniform given length prior \citep{white2020learning} and
-a more informative language model prior.
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar=5pt,
+    ylabel=Accuracy,
+    symbolic x coords={literal, length, MAP, Bayes},    
+    nodes near coords,
+    nodes near coords align={vertical},
+    every node near coord/.append style={font=\tiny},
+    width=5cm,
+    xtick pos=left,
+    ymajorgrids=true,
+    ymin=0,
+    ymax=1.15,
+    xticklabel style={rotate=65, anchor=east},
+]
+\addplot coordinates {
+    (literal, 0.9648)
+    (length, 0.9636)
+    (MAP, 0.9724)
+    (Bayes, 0.9588)
+};
+\end{axis}
+\end{tikzpicture}
+\caption{The speaker accuracies using an ensemble of listeners trained on
+held out data for \textsc{ShapeWorld}.
+The literal speaker was trained directly via MLE, while the amortized
+length, MAP, and Bayes speakers were trained to optimize their
+eponymous objectives using the straight-through Gumbel-softmax estimator.
+}
+\label{fig:accuracy}
+\end{figure}
 
-We measure the effect of the prior by comparing the perplexity and accuracy of the 
-amortized speaker trained with either a uniform given length or more informative language
-model prior.
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar=5pt,
+    ylabel=NLL,
+    symbolic x coords={literal, length, MAP, Bayes},    
+    nodes near coords,
+    nodes near coords align={vertical},
+    every node near coord/.append style={font=\tiny},
+    width=5cm,
+    xtick pos=left,
+    ymajorgrids=true,
+    ymin=0,
+    ymax=25,
+    xticklabel style={rotate=65, anchor=east},
+]
+\addplot coordinates {
+    (literal, 20.288)
+    (length, 20.31)
+    (MAP, 20.3076)
+    (Bayes, 20.1356)
+};
+\end{axis}
+\end{tikzpicture}
+\caption{The average negative log likelihood (NLL) of utterances produced from each speaker in
+\textsc{ShapeWorld} as measured by a marginal language model $p(u)$ that
+does not see the objects or target.
+The lower the NLL, the better.
+}
+\label{fig:likelihood}
+\end{figure}
 
-\paragraph{Likelihood}
-We also evaluate the listener's accuracy on validation data,
-as well as sensitivity to low-probability words.
 
-\subsection{Search Error}
-intro
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar=5pt,
+    ylabel=Length,
+    symbolic x coords={literal, length, MAP, Bayes},    
+    nodes near coords,
+    nodes near coords align={vertical},
+    every node near coord/.append style={font=\tiny},
+    width=5cm,
+    xtick pos=left,
+    ymajorgrids=true,
+    ymin=0,
+    ymax=2,
+    xticklabel style={rotate=65, anchor=east},
+]
+\addplot coordinates {
+    (literal, 1.4256)
+    (length, 1.448)
+    (MAP, 1.6132)
+    (Bayes, 1.5158)
+};
+\end{axis}
+\end{tikzpicture}
+\caption{The average utterance lengths from each speaker using
+an ensemble of listeners trained on
+held out data for \textsc{ShapeWorld}.
+}
+\label{fig:length}
+\end{figure}
 
-\paragraph{Amortization error}
-We examine whether there is error due to amortization,
-rather than directly optimizing the objective.
+As for speaker performance, we find that all speakers are very accurate
+and obtain at least 96\% accuracy when evaluated with test literal listeners
+trained on held-out data, as shown in Figure~\ref{fig:accuracy}.
+The MAP speaker outperformed the other variants very slightly.
+We additionally outperform the speakers from \citet{white2020learning},
+where the literal speaker obtained 73\% accuracy.
 
-In the enumerable case, this is simply
+The likehoods of the utterances produced by the speaker also is very close,
+as shown in Figure~\ref{fig:likelihood}.
+Interestingly, the Bayes speaker has slightly better likelihood.
+This is surprising, as there is little difference between the MAP and Bayes
+objectives. It is likely that this is not statistically significant.
+
+The average lengths of the utterances of the speakers is given in Figure~\ref{fig:length}.
+The MAP utterances are on average longest.
+This may account for the higher accurace of the MAP speaker, which could be producing
+longer utterances resulting in less ambiguity.
+Since the MAP objective has an informative utterance prior, this leads to less
+pressure to produce shorter utterances.
+
+The observation that the MAP speaker has higher accuracy as well as longer utterances
+implies that the literal speaker underestimates the listener, and occasionally
+does not provide enough information in an utterance.
+This could happen in a scenario where both the color and shape is necessary to 
+successfully communicate a shape, but only one of the two qualities is uttered.
 
 \section{Discussion}
+Unfortunately, the \textsc{ShapeWorld} dataset itself is too simple to observe
+language drift, leaving our study inconclusive as to whether the proposed
+method fixes that particular issue.
+However, we may return shortly with results on the \textsc{Colors} dataset,
+which did exhibit speakers with language drift.
+
+Additionally, it noteworthy that application of the straight through Gumbel-softmax
+estimator may be leading to extremely unstable learning dynamics.
+Although the objective improves for the first few epochs,
+performance on the training objective eventually plummets.
 
 \bibliographystyle{acl_natbib}
 \bibliography{anthology}
 
 %\clearpage
-\appendix
+%\appendix
 
-\section*{Appendix}
-\section{Blah}
+%\section*{Appendix}
+%\section{Blah}
    
 \end{document}
